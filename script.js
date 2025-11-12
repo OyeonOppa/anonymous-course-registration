@@ -760,3 +760,91 @@ async function showConfirmAlert(title, message) {
     });
     return result.isConfirmed;
 }
+
+// กำหนด default config สำหรับ SweetAlert2
+const swalMobileConfig = {
+  customClass: {
+    popup: 'swal-custom-popup',
+    confirmButton: 'swal-custom-button',
+    cancelButton: 'swal-custom-button'
+  },
+  // ปรับขนาดตามหน้าจอ
+  width: window.innerWidth < 576 ? '90%' : '600px',
+  // ปิด animation ถ้าเป็นมือถือ (เร็วขึ้น)
+  animation: window.innerWidth >= 768
+};
+
+// แก้ไข showDuplicateModal
+function showDuplicateModal(type, existingAnonymousId) {
+    const title = type === 'idCard' 
+        ? 'เลขบัตรประชาชนนี้เคยลงทะเบียนแล้ว' 
+        : 'อีเมลนี้เคยลงทะเบียนแล้ว';
+    
+    Swal.fire({
+        ...swalMobileConfig,
+        icon: 'warning',
+        title: title,
+        html: `
+            <div style="text-align: left;">
+                <p style="font-size: ${window.innerWidth < 576 ? '0.9rem' : '1rem'};">
+                    ท่านได้ลงทะเบียนเข้าหลักสูตรนี้ไปแล้ว
+                </p>
+                
+                <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+                            border: 2px solid #dc2626; 
+                            border-radius: 12px; 
+                            padding: 1rem; 
+                            text-align: center; 
+                            margin: 1rem 0;">
+                    <small style="color: #64748b; font-size: 0.8rem;">รหัสอ้างอิงเดิมของท่าน:</small><br>
+                    <strong style="font-size: ${window.innerWidth < 576 ? '1.25rem' : '1.75rem'}; 
+                                   color: #dc2626; 
+                                   letter-spacing: ${window.innerWidth < 576 ? '1px' : '2px'}; 
+                                   word-break: break-all; 
+                                   display: block; 
+                                   margin-top: 0.5rem;">
+                        ${existingAnonymousId}
+                    </strong>
+                </div>
+                
+                <div style="background: #fef3c7; 
+                            border-left: 4px solid #f59e0b; 
+                            padding: 0.875rem; 
+                            border-radius: 8px; 
+                            margin-top: 1rem;">
+                    <strong style="color: #92400e; font-size: 0.9rem;">💡 ท่านสามารถ:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.25rem; padding: 0; font-size: 0.85rem;">
+                        <li style="color: #92400e; margin: 0.4rem 0;">ตรวจสอบสถานะด้วยรหัสอ้างอิงข้างต้น</li>
+                        <li style="color: #92400e; margin: 0.4rem 0;">ติดต่อเจ้าหน้าที่หากต้องการแก้ไขข้อมูล</li>
+                        <li style="color: #92400e; margin: 0.4rem 0;">รอผลการพิจารณาทางอีเมล</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #dbeafe; 
+                            padding: 0.875rem; 
+                            border-radius: 8px; 
+                            margin-top: 1rem; 
+                            text-align: center;">
+                    <small style="color: #1e40af; font-size: 0.8rem; line-height: 1.4;">
+                        <strong>หมายเหตุ:</strong> ระบบป้องกันการลงทะเบียนซ้ำ
+                        เพื่อให้การคัดเลือกเป็นไปอย่างยุติธรรม
+                    </small>
+                </div>
+            </div>
+        `,
+        confirmButtonText: 'เข้าใจแล้ว',
+        confirmButtonColor: '#1e3a8a'
+    });
+}
+
+// แก้ไข showLoadingAlert
+function showLoadingAlert(message = 'กำลังดำเนินการ...') {
+    Swal.fire({
+        ...swalMobileConfig,
+        title: message,
+        html: '<div class="spinner-border text-primary" style="width: 2.5rem; height: 2.5rem;"></div>',
+        showConfirmButton: false,
+        allowOutsideClick: false,
+        allowEscapeKey: false
+    });
+}
