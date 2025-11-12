@@ -309,9 +309,14 @@ function showSuccessScreen() {
                 <br />
                 <small class="text-muted">(กรุณาตรวจสอบใน Inbox และ Junk/Spam)</small>
             </p>
-            <button class="btn btn-primary mt-3" onclick="location.reload()">
-                กรอกข้อมูลใหม่
-            </button>
+            <div class="d-flex gap-2 justify-content-center mt-4">
+                <a href="check-status.html?id=${anonymousId}" class="btn btn-outline-primary">
+                    ตรวจสอบสถานะ
+                </a>
+                <button class="btn btn-primary" onclick="location.reload()">
+                    กรอกข้อมูลใหม่
+                </button>
+            </div>
         </div>
     `;
 }
@@ -504,28 +509,36 @@ async function handleNext() {
     if (currentStep === 1) {
         if (!validateStep1()) return;
         
-        // Check duplicate
-        showCheckingScreen();
+        // แสดง loading
+        showLoadingAlert('กำลังตรวจสอบข้อมูล...');
         
-        const isDuplicate = await checkDuplicate(formData.idCard, formData.email);
-        
-        if (isDuplicate) {
+        try {
+            // Check duplicate
+            const isDuplicate = await checkDuplicate(formData.idCard, formData.email);
+            
+            Swal.close(); // ปิด loading
+            
+            if (isDuplicate) {
+                renderStep(1);
+                return;
+            }
+            
+            // Generate Anonymous ID
+            anonymousId = generateAnonymousId();
+            
+        } catch (error) {
+            console.error('Error in handleNext:', error);
+            Swal.close();
+            showErrorAlert('เกิดข้อผิดพลาดในการตรวจสอบข้อมูล กรุณาลองใหม่อีกครั้ง');
             renderStep(1);
             return;
         }
         
-        // Generate Anonymous ID
-        anonymousId = generateAnonymousId();
     } else if (currentStep === 2) {
         if (!validateStep2()) return;
     }
     
     renderStep(currentStep + 1);
-}
-
-function handlePrevious() {
-    saveFormValues();
-    renderStep(currentStep - 1);
 }
 
 // ================================
@@ -548,20 +561,10 @@ async function checkDuplicate(idCard, email) {
         console.log('Result:', result);
         
         if (result.success && result.isDuplicate) {
-            // ใช้ alert แทน modal
-            const message = result.type === 'idCard' 
-                ? '❌ เลขบัตรประชาชนนี้เคยลงทะเบียนแล้ว' 
-                : '❌ อีเมลนี้เคยลงทะเบียนแล้ว';
-            
-            alert(
-                `${message}\n\n` +
-                `รหัสอ้างอิงเดิมของท่าน: ${result.existingAnonymousId}\n\n` +
-                `💡 ท่านสามารถ:\n` +
-                `• ตรวจสอบสถานะด้วยรหัสอ้างอิงข้างต้น\n` +
-                `• ติดต่อเจ้าหน้าที่หากต้องการแก้ไขข้อมูล\n` +
-                `• รอผลการพิจารณาทางอีเมล`
-            );
-            
+            // ใช้ setTimeout เพื่อให้ renderStep(1) ทำงานเสร็จก่อน
+            setTimeout(() => {
+                showDuplicateModal(result.type, result.existingAnonymousId);
+            }, 100);
             return true;
         }
         
@@ -570,12 +573,10 @@ async function checkDuplicate(idCard, email) {
     } catch (error) {
         console.error('Error checking duplicate:', error);
         
-        const proceed = confirm(
-            'ไม่สามารถตรวจสอบข้อมูลซ้ำได้ในขณะนี้\n\n' +
-            'สาเหตุอาจเป็น:\n' +
-            '- เครือข่ายอินเทอร์เน็ตไม่เสถียร\n' +
-            '- ระบบกำลังอัพเดท\n\n' +
-            'คุณต้องการดำเนินการต่อหรือไม่?'
+        // ใช้ SweetAlert2 แทน confirm
+        const proceed = await showConfirmAlert(
+            'ไม่สามารถตรวจสอบข้อมูลซ้ำได้',
+            'สาเหตุอาจเป็นเครือข่ายอินเทอร์เน็ตไม่เสถียร หรือระบบกำลังอัพเดท\n\nคุณต้องการดำเนินการต่อหรือไม่?'
         );
         
         return !proceed;
@@ -591,9 +592,22 @@ async function handleSubmit() {
     
     if (!validateStep3()) return;
     
-    const submitBtn = document.getElementById('submitBtn');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังส่งข้อมูล...';
+    // ยืนยันก่อนส่ง
+    const confirmed = await Swal.fire({
+        title: '⚠️ ยืนยันการส่งข้อมูล',
+        text: 'เมื่อกดยืนยันแล้ว จะไม่สามารถแก้ไขข้อมูลได้',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยัน ส่งข้อมูล',
+        cancelButtonText: 'ตรวจสอบอีกครั้ง',
+        confirmButtonColor: '#059669',
+        cancelButtonColor: '#64748b'
+    });
+    
+    if (!confirmed.isConfirmed) return;
+    
+    // แสดง loading
+    showLoadingAlert('กำลังส่งข้อมูล...');
     
     try {
         const dataToSend = {
@@ -618,13 +632,14 @@ async function handleSubmit() {
         // Wait a moment
         await new Promise(resolve => setTimeout(resolve, 2000));
         
+        Swal.close();
+        
         showSuccessScreen();
         
     } catch (error) {
         console.error('❌ Error:', error);
-        alert('เกิดข้อผิดพลาด: ' + error.message + '\n\nกรุณาลองใหม่อีกครั้ง');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'ส่งข้อมูล ✓';
+        Swal.close();
+        showErrorAlert('เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง');
     }
 }
 
@@ -632,30 +647,116 @@ async function handleSubmit() {
 // 🎭 MODAL FUNCTIONS
 // ================================
 
+// ================================
+// 🍬 SWEETALERT2 FUNCTIONS
+// ================================
+
+// แสดงข้อมูลซ้ำ
 function showDuplicateModal(type, existingAnonymousId) {
-    const modal = document.getElementById('duplicateModal');
-    const title = document.getElementById('modalTitle');
-    const anonymousIdDisplay = document.getElementById('modalAnonymousId');
+    const title = type === 'idCard' 
+        ? 'เลขบัตรประชาชนนี้เคยลงทะเบียนแล้ว' 
+        : 'อีเมลนี้เคยลงทะเบียนแล้ว';
     
-    if (type === 'idCard') {
-        title.textContent = '⚠️ เลขบัตรประชาชนนี้เคยลงทะเบียนแล้ว';
-    } else {
-        title.textContent = '⚠️ อีเมลนี้เคยลงทะเบียนแล้ว';
-    }
-    
-    anonymousIdDisplay.textContent = existingAnonymousId || 'N/A';
-    
-    modal.classList.add('show');
+    Swal.fire({
+        icon: 'warning',
+        title: title,
+        html: `
+            <div style="text-align: left;">
+                <p>ท่านได้ลงทะเบียนเข้าหลักสูตรนี้ไปแล้ว</p>
+                
+                <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+                            border: 2px solid #dc2626; 
+                            border-radius: 12px; 
+                            padding: 1.25rem; 
+                            text-align: center; 
+                            margin: 1.5rem 0;">
+                    <small style="color: #64748b; font-size: 0.9rem;">รหัสอ้างอิงเดิมของท่าน:</small><br>
+                    <strong style="font-size: 1.75rem; 
+                                   color: #dc2626; 
+                                   letter-spacing: 2px;">
+                        ${existingAnonymousId}
+                    </strong>
+                </div>
+                
+                <div style="background: #fef3c7; 
+                            border-left: 4px solid #f59e0b; 
+                            padding: 1rem; 
+                            border-radius: 8px; 
+                            margin-top: 1rem;">
+                    <strong style="color: #92400e;">💡 ท่านสามารถ:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
+                        <li style="color: #92400e; margin: 0.5rem 0;">ตรวจสอบสถานะด้วยรหัสอ้างอิงข้างต้น</li>
+                        <li style="color: #92400e; margin: 0.5rem 0;">ติดต่อเจ้าหน้าที่หากต้องการแก้ไขข้อมูล</li>
+                        <li style="color: #92400e; margin: 0.5rem 0;">รอผลการพิจารณาทางอีเมล</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #dbeafe; 
+                            padding: 1rem; 
+                            border-radius: 8px; 
+                            margin-top: 1rem; 
+                            text-align: center;">
+                    <small style="color: #1e40af;">
+                        <strong>หมายเหตุ:</strong> ระบบป้องกันการลงทะเบียนซ้ำ
+                        เพื่อให้การคัดเลือกเป็นไปอย่างยุติธรรม
+                    </small>
+                </div>
+            </div>
+        `,
+        confirmButtonText: 'เข้าใจแล้ว',
+        confirmButtonColor: '#1e3a8a',
+        width: '600px',
+        customClass: {
+            popup: 'swal-custom-popup',
+            confirmButton: 'swal-custom-button'
+        }
+    });
 }
 
-function closeDuplicateModal() {
-    const modal = document.getElementById('duplicateModal');
-    modal.classList.remove('show');
+// แสดง Loading
+function showLoadingAlert(message = 'กำลังดำเนินการ...') {
+    Swal.fire({
+        title: message,
+        html: '<div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>',
+        showConfirmButton: false,
+        allowOutsideClick: false,
+        allowEscapeKey: false
+    });
 }
 
-// Close modal when clicking outside
-document.getElementById('duplicateModal')?.addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeDuplicateModal();
-    }
-});
+// แสดงความสำเร็จ
+function showSuccessAlert(title, message) {
+    Swal.fire({
+        icon: 'success',
+        title: title,
+        text: message,
+        confirmButtonText: 'ตกลง',
+        confirmButtonColor: '#059669'
+    });
+}
+
+// แสดงข้อผิดพลาด
+function showErrorAlert(message) {
+    Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: message,
+        confirmButtonText: 'ลองอีกครั้ง',
+        confirmButtonColor: '#dc2626'
+    });
+}
+
+// ยืนยันการกระทำ
+async function showConfirmAlert(title, message) {
+    const result = await Swal.fire({
+        title: title,
+        text: message,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'ใช่, ดำเนินการต่อ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#1e3a8a',
+        cancelButtonColor: '#64748b'
+    });
+    return result.isConfirmed;
+}
